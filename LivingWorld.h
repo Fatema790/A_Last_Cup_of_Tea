@@ -1,0 +1,80 @@
+// Shared additions to the original simulation. Included after Vec3/Color and world data.
+#pragma once
+
+enum Season { SPRING, SUMMER, AUTUMN, WINTER };
+enum Weather { CLEAR, CLOUDY, RAIN, STORM, SNOW, WINDY };
+enum HumanAction { FREE_WALK, TEA_APPROACH, TEA_TURN, TEA_SIT, TEA_DRINK,
+                   TEA_REST, TEA_STAND, SHELTER_WALK, SHELTER_SIT, SHELTER_REST, SHELTER_STAND };
+struct RainParticle { float x,y,z,speed; };
+struct SnowParticle { float x,y,z,speed,rotation; };
+struct FallingLeaf { float x,y,z,rotation,speed,drift; };
+struct SteamParticle { float x,y,z,life,size; };
+struct Atmosphere {
+    Season season=SPRING;
+    Weather weather=CLEAR;
+    std::array<float,4> seasons{{1,0,0,0}};
+    std::array<float,6> weatherMix{{1,0,0,0,0,0}};
+    bool automatic=false;
+    float cycleTime=0,wetness=0,lightningFlash=0,lightningTimer=11,reactionTime=0;
+    std::array<RainParticle,500> rain;
+    std::array<SnowParticle,400> snow;
+    std::array<FallingLeaf,100> leaves;
+    std::array<SteamParticle,20> steam;
+} atmosphere;
+struct Human {
+    Vec3 position{0,0,5.5f};
+    float yaw=0,walkCycle=0,walkBlend=0,legAngle=0,armAngle=0,bodyBob=0;
+    float actionTime=0,sitBlend=0,reach=0,drinkProgress=0,cupLift=0,cupTilt=0;
+    float turnStart=0,standingFrom=0;
+    bool shelterRequested=false,cupHeld=false,leaveRequested=false;
+    HumanAction action=FREE_WALK;
+    Vec3 cupPosition{.12f,1.37f,0};
+    std::vector<Vec3> route;
+    size_t waypoint=0;
+} human;
+float windStrength=.22f,cameraDistance=6.0f;
+constexpr float CUP_SCALE=.72f;
+Vec3 viewAim{0,1.4f,5.5f};
+unsigned particleSeed=173;
+const char* seasonNames[]={"SPRING","SUMMER","AUTUMN","WINTER"};
+const char* weatherNames[]={"CLEAR","CLOUDY","RAIN","STORM","SNOW","WINDY"};
+
+Vec3 interactionOrigin();
+float rainAmount();
+float snowAmount();
+float coldAmount();
+float cloudAmount();
+float seasonalWildlife();
+Color seasonColor(Color spring,Color summer,Color autumn,Color winter);
+Color groundColor();
+Color foliageColor();
+void resetLivingWorld();
+void selectSeason(Season season,bool manual=true);
+void selectWeather(Weather weather,bool react=true);
+void updateAtmosphere(float dt);
+void updateHuman(float dt);
+void updateFollowCamera(float dt,bool snap=false);
+bool beginTea();
+void leaveTea();
+void animateSit();
+void animateDrink();
+bool planWalk(Vec3 destination);
+bool teaActive();
+void drawHuman();
+void drawHead();
+void drawBody();
+void drawArm(Vec3 shoulder,Vec3 hand,int side);
+void drawLeg(int side);
+void drawHand(Vec3 p);
+void drawFoot();
+void drawShelter();
+void drawSeasonalClouds();
+void drawWeatherParticles();
+void drawBreath();
+void drawLivingSteam();
+void drawAtmosphereHUD();
+void applyAtmosphereLighting();
+Vec3 cupHandlePosition();
+Vec3 rightHandPosition();
+std::string humanStatus();
+void specialKeyboard(int key,int,int);

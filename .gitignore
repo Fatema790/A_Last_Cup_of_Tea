@@ -1,0 +1,7 @@
+.tools/
+build/
+dist/
+*.o
+*.obj
+*.ppm
+/A-Last-Cup-of-Tea.zip
