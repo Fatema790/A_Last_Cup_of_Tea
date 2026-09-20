@@ -82,7 +82,8 @@ void updateHomestead(float dt){
     for(int i=0;i<4;i++){
         auto& c=homestead.cows[i];Vec3 old=c.position;
         float cycle=std::fmod(world.time+i*6.5f,27.0f);
-        bool walk=cycle<10&&i!=3&&homestead.feedTime<=0;
+        bool alarmed=disasterActive()&&disaster.intensity>.3f;
+        bool walk=cycle<10&&i!=3&&homestead.feedTime<=0&&!alarmed;
         if(walk&&std::hypot(human.position.x-c.position.x,human.position.z-c.position.z)>2.8f){
             float angle=c.angle+dt*.18f;Vec3 next=c.center+Vec3{std::cos(angle)*1.25f,0,std::sin(angle)*.72f};
             bool blocked=farmCollision(next.x,next.z,1.1f);
@@ -95,7 +96,7 @@ void updateHomestead(float dt){
             }
         }
         Vec3 moved=c.position-old;moved.y=0;c.walking=length(moved)>.00001f;c.gait+=length(moved)*5;
-        c.graze=mix(c.graze,!c.walking&&homestead.feedTime<=0?1.0f:0.0f,1-std::exp(-dt*1.7f));
+        c.graze=mix(c.graze,!c.walking&&homestead.feedTime<=0&&!alarmed?1.0f:0.0f,1-std::exp(-dt*1.7f));
         c.position.y=std::max(.02f,terrain(c.position.x,c.position.z));
     }
 }

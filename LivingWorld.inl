@@ -61,7 +61,7 @@ void updateAtmosphere(float dt){
     for(int i=0;i<6;i++)atmosphere.weatherMix[i]=mix(atmosphere.weatherMix[i],i==atmosphere.weather?1.0f:0.0f,ease);
     const float winds[]={.22f,.35f,.65f,1.6f,.4f,1.2f};windStrength=0;
     for(int i=0;i<6;i++)windStrength+=winds[i]*atmosphere.weatherMix[i];
-    windStrength+=atmosphere.seasons[AUTUMN]*.12f;
+    windStrength+=atmosphere.seasons[AUTUMN]*.12f+disaster.storm*1.8f;
     atmosphere.wetness=mix(atmosphere.wetness,rainAmount(),1-std::exp(-dt*.25f));
     atmosphere.reactionTime=std::max(0.0f,atmosphere.reactionTime-dt);
     atmosphere.lightningFlash=std::max(0.0f,atmosphere.lightningFlash-dt*4.5f);
@@ -323,7 +323,7 @@ void drawHead(){
     cylinder(.085f,.08f,.12f,skin);
     glPushMatrix();glTranslatef(0,.26f,0);
     float lookUp=(rainAmount()>.2f&&atmosphere.reactionTime>0)?12*std::abs(std::sin(atmosphere.reactionTime*2)):0;
-    glRotatef(lookUp,1,0,0);glRotatef(std::sin(world.time*.65f)*(3*(1-human.walkBlend)+coldAmount()*5),0,1,0);
+    glRotatef(lookUp+disaster.lookPitch,1,0,0);glRotatef(disaster.lookYaw,0,1,0);glRotatef(std::sin(world.time*.65f)*(3*(1-human.walkBlend)+coldAmount()*5),0,1,0);
     sphere(0,0,0,.205f,.245f,.20f,skin);
     sphere(0,.155f,.025f,.211f,.13f,.20f,{.10f,.065f,.045f});
     for(int i=0;i<3;i++)sphere(-.14f+i*.12f,.22f+std::sin(world.time*2+i)*windStrength*.009f,-.025f,.085f,.055f,.15f,{.105f,.07f,.045f});
@@ -353,6 +353,7 @@ void drawHuman(){
         }else if(side==-1&&!teaActive()){
             float reaction=clamp(atmosphere.reactionTime)*rainAmount();hand=hand*(1-reaction)+Vec3{-.31f,1.98f,-.25f}*reaction;
         }
+        if(disaster.fear>0&&!human.cupHeld)hand=hand*(1-disaster.fear)+Vec3{side*.25f,1.95f,-.23f}*disaster.fear;
         drawArm(shoulder,hand,side);
     }
     glPopMatrix();
@@ -406,7 +407,8 @@ void drawPuff(Vec3 p,float radius,float alpha){
     for(int i=0;i<=12;i++){float a=i*PI/6;Vec3 v=p+right*(std::cos(a)*radius)+Vec3{0,std::sin(a)*radius,0};glVertex3f(v.x,v.y,v.z);}glEnd();
 }
 void drawLivingSteam(){
-    float thick=.36f+coldAmount()*.23f+rainAmount()*.13f+(human.cupHeld?.1f:0);
+    if(disaster.phase==D_SILENCE&&disaster.time>14)return;
+    float thick=(.36f+coldAmount()*.23f+rainAmount()*.13f+(human.cupHeld?.1f:0))*(disaster.phase==D_SILENCE?1-smooth((disaster.time-7)/7):1);
     // Twenty recycled translucent particles; local coordinates keep steam attached to the cup.
     glDisable(GL_LIGHTING);
     for(const auto& p:atmosphere.steam){float t=p.life;float x=p.x+std::sin(t*7+steamPhase)*.045f+windStrength*t*t*.27f;
@@ -449,4 +451,4 @@ void drawAtmosphereHUD(){
     text(x+16,291,humanStatus(),{.86f,.78f,.56f});
     text(x+16,317,atmosphere.automatic?"AUTO SEASONS: ON   [ T ]":"AUTO SEASONS: OFF   [ T ]",{.66f,.77f,.66f});
 }
-void specialKeyboard(int key,int,int){if(paused)return;if(key>=GLUT_KEY_F1&&key<=GLUT_KEY_F4)selectSeason(Season(key-GLUT_KEY_F1));}
+void specialKeyboard(int key,int,int){if(paused||disasterActive())return;if(key>=GLUT_KEY_F1&&key<=GLUT_KEY_F4)selectSeason(Season(key-GLUT_KEY_F1));}

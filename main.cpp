@@ -29,7 +29,7 @@ struct Color{float r,g,b;};
 Color blend(Color a,Color b,float t){return {mix(a.r,b.r,t),mix(a.g,b.g,t),mix(a.b,b.b,t)};}
 enum EnvironmentState{HEALTHY,WARNING,DAMAGED,RECOVERING,RESTORED};
 enum TreeState{NORMAL,SHAKE,FALLING,REMOVED};
-enum Kind{TEA,TREE,RIVER,FLOWERS,BIRD,WARNING_SIGN,PLANT,GARBAGE,SWITCH,HABITAT,HOME_LAMP,FARM_FEED};
+enum Kind{TEA,TREE,RIVER,FLOWERS,BIRD,WARNING_SIGN,PLANT,GARBAGE,SWITCH,HABITAT,HOME_LAMP,FARM_FEED,DISASTER_BATON};
 struct Tree{Vec3 p;float size,delay;TreeState state=NORMAL;float angle=0;};
 struct Interactive{Kind kind;Vec3 p;std::string name,verb;int item=-1;};
 struct SmokeParticle{float x,y,z,size,alpha;};
@@ -45,7 +45,7 @@ float cameraX=0,cameraY=2.4f,cameraZ=5.5f,cameraYaw=0,cameraPitch=-12;
 int width=1440,height=900,lastTick=0,selected=-1;
 bool keys[256]{},paused=false,mouseCaptured=false,seated=false,showHelp=true,warping=false;
 bool renderCheck=false;int captureStage=0;
-bool benchmarkMode=false;int benchmarkFrames=0;
+bool disasterBenchmark=false;bool benchmarkMode=false;int benchmarkFrames=0;
 std::chrono::steady_clock::time_point benchmarkStart;
 float seatTime=0,messageUntil=0;
 std::string message="Walk softly. There is a whole world in this moment.";
@@ -55,19 +55,21 @@ GLUquadric* quadric=nullptr;
 float birdPhase=0,butterflyPhase=0,cloudPhase=0,waterPhase=0,steamPhase=0,leafPhase=0;
 #include "LivingWorld.h"
 #include "Homestead.h"
+#include "Disaster.h"
 
 float terrain(float x,float z){return .075f*std::sin(x*.23f)*std::cos(z*.19f);}
 Vec3 camera(){return {cameraX,cameraY,cameraZ};}
 int actions(){return int(world.planted)+int(world.pollutionStopped)+int(world.habitat)+int(world.litter[0])+int(world.litter[1])+int(world.litter[2]);}
-float damage(){return world.environmentProgress*(1-world.recoveryProgress);}
+float damage(){return std::max(world.environmentProgress*(1-world.recoveryProgress),disaster.damage);}
 float ecology(float threshold){
+    if(disasterActive())return (1-disaster.damage)*(1-world.environmentProgress*(1-world.recoveryProgress));
     if(world.state==RECOVERING || world.state==RESTORED)
         return smooth((world.recoveryProgress-threshold+.12f)/.20f);
     return 1-world.environmentProgress;
 }
 void say(const std::string& text,float seconds=6){message=text;messageUntil=world.time+seconds;}
 void reset(){
-    world=World{};
+    resetDisaster();world=World{};
     // Fixed placement makes the world and tests reproducible; every tree has a unique fall delay.
     const Vec3 positions[]={{-7,0,-5},{7,0,-7},{-16,0,-4},{14,0,3},{-21,0,-15},{3,0,-19},
         {15,0,-24},{-26,0,3},{26,0,3},{-9,0,23},{9,0,25},{-22,0,29},{22,0,28},
@@ -86,7 +88,8 @@ void reset(){
         {SWITCH,{21,1,-15},"Factory shutoff","Stop pollution"},
         {HABITAT,{-12,1,23},"Wildlife refuge","Restore habitat"},
         {HOME_LAMP,{-15.3f,1.5f,-13.5f},"Home lighting","Toggle warm lights"},
-        {FARM_FEED,{18.3f,1,-6.4f},"Cow feed trough","Put out fresh hay"}};
+        {FARM_FEED,{18.3f,1,-6.4f},"Cow feed trough","Put out fresh hay"},
+        {DISASTER_BATON,BATON_POSITION,"Emergency baton - disaster story","Activate disaster sequence"}};
     cameraX=0;cameraY=2.4f;cameraZ=5.5f;cameraYaw=0;cameraPitch=-12;
     paused=false;seated=false;seatTime=0;selected=-1;
     std::fill(std::begin(keys),std::end(keys),false);
@@ -96,6 +99,7 @@ void reset(){
 }
 bool taskTime(){return world.state==DAMAGED || world.state==RECOVERING;}
 bool available(const Interactive& o){
+    if(disasterActive())return false;
     switch(o.kind){
     case PLANT:return taskTime()&&!world.planted;
     case GARBAGE:return taskTime()&&!world.litter[o.item];
@@ -127,7 +131,7 @@ bool checkCollision(float x,float z){
     return false;
 }
 void updatePlayer(float dt){
-    updateHuman(dt);
+    if(!updateDisasterActor(dt))updateHuman(dt);
 }
 void updateTrees(float){
     for(size_t i=0;i<world.trees.size();i++){
@@ -175,7 +179,8 @@ void updateSmoke(float){
 }
 void update(float dt){
     if(paused)return;
-    world.time+=dt;updateAtmosphere(dt);updateHomestead(dt);updatePlayer(dt);updateEnvironment(dt);updateRecovery(dt);updateTrees(dt);
+    world.time+=dt;updateDisaster(dt);updateAtmosphere(dt);updateHomestead(dt);updatePlayer(dt);
+    if(!disasterActive()){updateEnvironment(dt);updateRecovery(dt);updateTrees(dt);}
     updateBirds(dt);updateButterflies(dt);updateClouds(dt);updateWater(dt);updateSteam(dt);updateSmoke(dt);updateFallingLeaves(dt);
     selected=nearest();
 }
@@ -184,6 +189,7 @@ bool interact(int index){
     const auto& o=interactions[index];
     if(!available(o)||length(interactionOrigin()-o.p)>=3.15f)return false;
     switch(o.kind){
+    case DISASTER_BATON:return startDisaster();
     case HOME_LAMP:homestead.lampOn=!homestead.lampOn;say(homestead.lampOn?"Warm lights on.":"Home lights off.");break;
     case FARM_FEED:homestead.feedTime=12;say("Fresh hay for the cows. A quiet moment on the farm.");break;
     case TEA:
@@ -240,7 +246,7 @@ void drawGround(){
         for(int x=-48;x<=48;x+=2)for(int k=1;k>=0;k--){float zz=float(z+k*2);
             float shade=.95f+.055f*std::sin(x*1.3f+zz*.7f);glColor3f(green.r*shade,green.g*shade,green.b*shade);
             float dx=.075f*.23f*std::cos(x*.23f)*std::cos(zz*.19f),dz=-.075f*.19f*std::sin(x*.23f)*std::sin(zz*.19f);
-            glNormal3f(-dx,1,-dz);glVertex3f(float(x),terrain(float(x),zz),zz);
+            glNormal3f(-dx,1,-dz);glVertex3f(float(x),terrain(float(x),zz)+disasterGround(float(x),zz),zz);
         }glEnd();}
     // Warm gravel footpath, with separate stretches leading across the bridge.
     material(blend({.62f,.54f,.38f},{.80f,.86f,.87f},atmosphere.seasons[WINTER]*.75f));
@@ -285,14 +291,14 @@ void drawTeaCup(){
     disk(0,.025f,0,.34f,cream); // Saucer and raised rim.
     glPushMatrix();glRotatef(90,1,0,0);material(cream,.65f);glutSolidTorus(.025,.31,8,32);glPopMatrix();
     glPopMatrix(); // The saucer stays on the table when the cup is lifted.
-    glPushMatrix();glTranslatef(human.cupPosition.x,human.cupPosition.y,human.cupPosition.z);glRotatef(human.cupTilt,1,0,0);
+    glPushMatrix();glTranslatef(human.cupPosition.x+disasterCupOffset().x,human.cupPosition.y+disasterCupOffset().y,human.cupPosition.z);glRotatef(human.cupTilt,1,0,0);
     glScalef(CUP_SCALE,CUP_SCALE,CUP_SCALE);
     // Outer and inner walls, plus a ring at the lip: the cup is hollow, not a capped cylinder.
     glPushMatrix();glRotatef(-90,1,0,0);material(cream,.65f);gluCylinder(quadric,.20,.29,.43,32,1);
     glTranslatef(0,0,.43f);gluDisk(quadric,.25,.29,32,1);glPopMatrix();
     glPushMatrix();glTranslatef(0,.07f,0);glRotatef(-90,1,0,0);gluQuadricOrientation(quadric,GLU_INSIDE);
     gluCylinder(quadric,.17,.25,.36,32,1);gluQuadricOrientation(quadric,GLU_OUTSIDE);glPopMatrix();
-    disk(0,.40f,0,.245f,{.40f,.17f,.045f});
+    disk(0,disaster.finalReturned?.23f:.40f,0,disaster.finalReturned?.20f:.245f,{.40f,.17f,.045f});
     glPushMatrix();glTranslatef(.29f,.23f,0);material(cream,.65f);glutSolidTorus(.048,.15,10,24);glPopMatrix();
     if(seated||selected==0)ring(0,.44f,0,.31f,{.94f,.71f,.32f});
     glPopMatrix();
@@ -301,10 +307,11 @@ void drawTable(){
     shadow(0,0,2.2f,1.35f);
     for(float x:{-1.35f,1.35f})for(float z:{-.65f,.65f})cube(x,.65f,z,.17f,1.3f,.17f,wood);
     for(int i=0;i<6;i++)cube(0,1.28f,-.75f+i*.30f,3.3f,.16f,.28f,lightWood);
+    glPushMatrix();glTranslatef(disasterCupOffset().x,0,0);
     cube(-.55f,1.38f,0,.07f,.035f,.65f,{.62f,.66f,.63f});
     sphere(-.55f,1.40f,-.33f,.12f,.035f,.18f,{.69f,.74f,.70f});
     cube(.95f,1.385f,.08f,.63f,.025f,.70f,{.84f,.80f,.63f});
-    drawTeaCup();
+    glPopMatrix();drawTeaCup();
 }
 void drawChair(){
     glPushMatrix();glTranslatef(0,0,teaActive()?-.78f*human.sitBlend:0);
@@ -315,13 +322,13 @@ void drawChair(){
     glPopMatrix();
 }
 void drawBridge(){
-    for(int i=0;i<25;i++)cube(0,.32f,8.3f+i*.43f,3.15f,.18f,.39f,lightWood);
+    for(int i=0;i<25;i++){float drop=disasterBridgeDrop(i);glPushMatrix();glTranslatef(0,.32f-drop,8.3f+i*.43f);glRotatef(drop*17*(i%2?1:-1),0,0,1);cube(0,0,0,3.15f,.18f,.39f,lightWood);glPopMatrix();}
     for(float x:{-1.55f,1.55f}){
         for(int i=0;i<5;i++)cube(x,.92f,8.3f+i*2.5f,.14f,1.5f,.14f,wood);
         cube(x,1.54f,13.3f,.11f,.13f,10.5f,wood);cube(x,.95f,13.3f,.09f,.09f,10.5f,wood);
     }
 }
-void drawRock(float x,float z,float s){shadow(x,z,s*1.2f,s);sphere(x,.45f*s,z,s,.7f*s,.8f*s,{.46f,.48f,.41f});}
+void drawRock(float x,float z,float s){glPushMatrix();glTranslatef(0,disasterGround(x,z),0);shadow(x,z,s*1.2f,s);sphere(x,.45f*s,z,s,.7f*s,.8f*s,{.46f,.48f,.41f});glPopMatrix();}
 void drawFlower(float x,float z,float s=1){
     float y=terrain(x,z);glPushMatrix();glTranslatef(x,y,z);glScalef(s,s,s);glRotatef(std::sin(world.time*2+x)*(3+windStrength*5),0,0,1);
     cylinder(.022f,.018f,.43f,{.23f,.40f,.17f});
@@ -393,11 +400,11 @@ void drawOpaqueWorld(){
         const auto& t=world.trees[i];
         if(t.state==REMOVED){glPushMatrix();glTranslatef(t.p.x,0,t.p.z);cylinder(.3f,.27f,.28f,lightWood);glPopMatrix();continue;}
         shadow(t.p.x,t.p.z,t.size*1.7f,t.size*1.4f);
-        glPushMatrix();glTranslatef(t.p.x,terrain(t.p.x,t.p.z),t.p.z);glRotatef(t.angle,1,0,.3f);
+        glPushMatrix();glTranslatef(t.p.x,terrain(t.p.x,t.p.z),t.p.z);glRotatef(t.angle+disasterTreeFall(i),1,0,.3f);
         float regrowth=(world.state==RECOVERING && i%3!=2)?smooth((world.recoveryProgress-.4f)/.18f):1;
         drawTree(0,0,0,t.size*std::max(.05f,regrowth));glPopMatrix();
     }
-    drawHomesteadPaths();drawFarm();drawHouse();drawShelter();drawTable();drawChair();drawBridge();drawFactory();drawPlant();drawCampfire();drawHabitat();drawHuman();
+    drawHomesteadPaths();drawBaton();drawFarm();drawHouse();drawShelter();drawTable();drawChair();drawBridge();drawFactory();drawPlant();drawCampfire();drawHabitat();drawHuman();
     drawRock(-18,7,1.2f);drawRock(18,6,1.3f);drawRock(-18,21,1.2f);drawRock(16,-14,1.1f);
     if(ecology(.2f)>.25f)for(int i=0;i<int(85*(1-atmosphere.seasons[WINTER])*(1-.4f*atmosphere.seasons[AUTUMN]));i++){float a=i*2.4f,r=.3f+float(i%10)*.21f;drawFlower(5+std::cos(a)*r,4+std::sin(a)*r,.8f+float(i%3)*.15f);}
     // Warning plaque and birdwatching perch.
@@ -405,8 +412,8 @@ void drawOpaqueWorld(){
     drawWorldLabel({11.4f,1.9f,-7.91f},"!  UPSTREAM",wood);
     cube(4,.8f,22,.14f,1.6f,.14f,wood);cube(4,1.6f,22,1.2f,.12f,.16f,lightWood);
     if(world.environmentProgress>.4f)for(const auto& o:interactions)if(o.kind==GARBAGE&&!world.litter[o.item])drawGarbage(o.p.x,o.p.z,o.item);
-    int birds=int(10*ecology(.8f)*seasonalWildlife());for(int i=0;i<birds;i++){float t=birdPhase*.23f+i*.628f;drawBird(std::sin(t)*17,7+std::sin(t*2+i)*1.6f,std::cos(t)*15-3,birdPhase+i);}
-    int butterflies=int(18*ecology(.6f)*seasonalWildlife()*(1-atmosphere.seasons[WINTER]));for(int i=0;i<butterflies;i++){float t=butterflyPhase*.65f+i;drawButterfly(5+std::sin(t)*2.5f+std::sin(world.time)*windStrength*.4f,1+std::sin(t*1.7f)*.45f,4+std::cos(t*.8f)*2.5f,butterflyPhase+i);}
+    int birds=int(10*ecology(.8f)*seasonalWildlife());for(int i=0;i<birds;i++){float t=birdPhase*.23f+i*.628f;drawBird(std::sin(t)*17,7+std::sin(t*2+i)*1.6f+disaster.damage*24,std::cos(t)*15-3-disaster.damage*18,birdPhase+i);}
+    int butterflies=int(18*ecology(.6f)*seasonalWildlife()*(1-atmosphere.seasons[WINTER]));for(int i=0;i<butterflies;i++){float t=butterflyPhase*.65f+i;drawButterfly(5+std::sin(t)*2.5f+std::sin(world.time)*windStrength*.4f,1+std::sin(t*1.7f)*.45f+disaster.damage*12,4+std::cos(t*.8f)*2.5f+disaster.damage*8,butterflyPhase+i);}
     glDisable(GL_LIGHTING);sphere(-24,32,-42,2.6f,2.6f,2.6f,blend({1,.89f,.60f},{.64f,.63f,.53f},damage()));glEnable(GL_LIGHTING);
     drawSeasonalClouds();
     // Animated leaves descend when the valley is being damaged.
@@ -481,13 +488,14 @@ void drawMinimap(){
     for(const auto& o:interactions){
         if(o.kind==TREE||o.kind==RIVER||o.kind==FLOWERS||o.kind==BIRD)continue;
         if(!available(o)&&o.kind!=TEA)continue;
-        auto p=point(o.p.x,o.p.z);text(p.x-3,p.y+4,o.kind==TEA?"T":o.kind==WARNING_SIGN?"!":o.kind==HOME_LAMP?"L":o.kind==FARM_FEED?"C":"G",o.kind==TEA?cream:Color{.91f,.68f,.34f});}
+        auto p=point(o.p.x,o.p.z);text(p.x-3,p.y+4,o.kind==TEA?"T":o.kind==WARNING_SIGN?"!":o.kind==DISASTER_BATON?"D":o.kind==HOME_LAMP?"L":o.kind==FARM_FEED?"C":"G",o.kind==TEA?cream:Color{.91f,.68f,.34f});}
     auto h=point(-10,-19);text(h.x,h.y,"H");auto f=point(26,-22);text(f.x,f.y,"F");
     auto p=point(human.position.x,human.position.z);rect(p.x-2,p.y-2,4,4,{1,.96f,.80f});
     float a=human.yaw*PI/180;glColor3f(1,.96f,.8f);glBegin(GL_LINES);glVertex2f(p.x,p.y);glVertex2f(p.x+std::sin(a)*9,p.y-std::cos(a)*9);glEnd();
-    text(x+12,y+164,"T tea  H home  C cows");
+    text(x+12,y+164,"T tea H home C cows D baton");
 }
 void drawHUD(){
+    if(disasterActive()){drawDisasterHUD();return;}
     // Save both matrix stacks. Orthographic HUD pixels must not change the 3D camera.
     glMatrixMode(GL_PROJECTION);glPushMatrix();glLoadIdentity();gluOrtho2D(0,width,height,0);
     glMatrixMode(GL_MODELVIEW);glPushMatrix();glLoadIdentity();glDisable(GL_DEPTH_TEST);glDisable(GL_LIGHTING);glDisable(GL_FOG);
@@ -540,14 +548,14 @@ void drawHUD(){
         text(x+16,y+23,"A PERSON IN THE VALLEY",cream);
         text(x+16,y+47,"Click, then move the mouse to orbit.");text(x+16,y+68,"F1 Spring  F2 Summer  F3 Autumn  F4 Winter");
         text(x+16,y+89,"1 Clear   2 Cloudy   3 Rain");text(x+16,y+110,"4 Storm   5 Snow   6 Windy");
-        text(x+16,y+131,"WASD overrides a walk to shelter.");text(x+16,y+153,"Approach the table and press E for tea.",{.71f,.77f,.46f});
+        text(x+16,y+131,"WASD overrides a walk to shelter.");text(x+16,y+153,"E near the red baton starts the disaster.",{.71f,.77f,.46f});
     }
     if(paused){rect(0,0,float(width),float(height),{.02f,.05f,.04f},.65f);centered(height*.5f,"PAUSED  /  Press P to return to the valley");}
     glDisable(GL_BLEND);glEnable(GL_DEPTH_TEST);glEnable(GL_LIGHTING);glEnable(GL_FOG);
     glPopMatrix();glMatrixMode(GL_PROJECTION);glPopMatrix();glMatrixMode(GL_MODELVIEW);
 }
 void setupLighting(){
-    applyAtmosphereLighting();setupHomeLighting();
+    applyAtmosphereLighting();setupHomeLighting();setupDisasterLighting();
 }
 void writeCapture(const std::string& filename){
     std::vector<unsigned char> pixels(size_t(width)*height*3);glPixelStorei(GL_PACK_ALIGNMENT,1);glReadBuffer(GL_BACK);
@@ -561,26 +569,27 @@ void display(){
     if(renderCheck)setCaptureFixture();
     if(benchmarkMode&&benchmarkFrames==0)benchmarkStart=std::chrono::steady_clock::now();
     glMatrixMode(GL_MODELVIEW);glLoadIdentity();
-    gluLookAt(cameraX,cameraY,cameraZ,viewAim.x,viewAim.y,viewAim.z,0,1,0);
+    Vec3 shake=disasterCameraShake();
+    gluLookAt(cameraX+shake.x,cameraY+shake.y,cameraZ+shake.z,viewAim.x+shake.x*.3f,viewAim.y+shake.y*.3f,viewAim.z,0,1,0);
     setupLighting();glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
-    drawOpaqueWorld();drawRiver();
-    glEnable(GL_BLEND);glDepthMask(GL_FALSE);drawHomeGlass();drawSmoke();drawTeaSteam();drawWeatherParticles();drawBreath();glDepthMask(GL_TRUE);glDisable(GL_BLEND);
+    drawOpaqueWorld();drawDisasterOpaque();drawRiver();
+    glEnable(GL_BLEND);glDepthMask(GL_FALSE);drawHomeGlass();drawSmoke();drawTeaSteam();drawWeatherParticles();drawBreath();drawDisasterTransparent();glDepthMask(GL_TRUE);glDisable(GL_BLEND);
     drawHUD();
     if(renderCheck){
         const char* names[]={"01-healthy","02-damaged","03-recovering","04-restored","05-final-tea",
             "06-spring-walk","07-summer","08-autumn","09-winter","10-rain","11-storm","12-summer-snow","13-windy",
-            "14-tea-reach","15-tea-lift","16-tea-sip","17-tea-return","18-shelter","19-tea-turn","20-tea-sit","21-home","22-door","23-living-room","24-kitchen","25-bedroom","26-bathroom","27-farm","28-cows"};
+            "14-tea-reach","15-tea-lift","16-tea-sip","17-tea-return","18-shelter","19-tea-turn","20-tea-sit","21-home","22-door","23-living-room","24-kitchen","25-bedroom","26-bathroom","27-farm","28-cows","29-baton-tea","30-warning","31-earthquake","32-lava","33-meteors","34-extreme-storm","35-ruin","36-last-cup","37-collapse","38-silence","39-darkness"};
         GLenum error=glGetError();if(error!=GL_NO_ERROR){std::cerr<<"OpenGL error "<<error<<"\n";std::exit(3);}
         writeCapture(captureDir+"/"+names[captureStage]+".ppm");
         std::cout<<"Captured "<<names[captureStage]<<"; GL_NO_ERROR\n";
-        if(++captureStage==28){glutLeaveMainLoop();return;}
+        if(++captureStage==39){glutLeaveMainLoop();return;}
     }
     glutSwapBuffers();
     if(benchmarkMode){
         if(glGetError()!=GL_NO_ERROR){std::cerr<<"Runtime graphics error\n";std::exit(3);}
         if(++benchmarkFrames==240){
             double seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-benchmarkStart).count();
-            std::cout<<"Runtime check: 240 animated storm frames, "<<std::fixed<<std::setprecision(1)<<240/seconds<<" average FPS; GL_NO_ERROR\n";
+            std::cout<<(disasterBenchmark?"Runtime check: 240 disaster frames, ":"Runtime check: 240 animated storm frames, ")<<std::fixed<<std::setprecision(1)<<240/seconds<<" average FPS; GL_NO_ERROR\n";
             glutLeaveMainLoop();
         }
     }
@@ -595,6 +604,8 @@ void keyboard(unsigned char raw,int,int){
     if(key=='p'){paused=!paused;std::fill(std::begin(keys),std::end(keys),false);if(paused)captureMouse(false);return;}
     if(key=='r'){reset();return;}if(key=='h'){showHelp=!showHelp;return;}
     if(key==9){captureMouse(!mouseCaptured);return;}if(paused)return;
+    if(key=='m'){disaster.reducedMotion=!disaster.reducedMotion;return;}
+    if(disasterActive())return;
     if(key>='1'&&key<='6'){selectWeather(Weather(key-'1'));return;}
     if(key=='v'){homestead.firstPerson=!homestead.firstPerson;updateFollowCamera(0,true);return;}
     if(key=='t'){atmosphere.automatic=!atmosphere.automatic;atmosphere.cycleTime=0;return;}
@@ -607,12 +618,13 @@ void keyboard(unsigned char raw,int,int){
 void keyboardUp(unsigned char key,int,int){keys[static_cast<unsigned char>(std::tolower(key))]=false;}
 void mouse(int button,int state,int,int){if(button==GLUT_LEFT_BUTTON&&state==GLUT_DOWN&&!paused)captureMouse(true);}
 void mouseMotion(int x,int y){
-    if(!mouseCaptured||paused||seated)return;
+    if(!mouseCaptured||paused||seated||disasterActive())return;
     int dx=x-width/2,dy=y-height/2;if(warping&&dx==0&&dy==0){warping=false;return;}
     cameraYaw=std::remainder(cameraYaw+dx*.13f,360.0f);cameraPitch=clamp(cameraPitch-dy*.13f,-65,homestead.firstPerson?65.0f:-5.0f);
     if(dx||dy){warping=true;glutWarpPointer(width/2,height/2);}
 }
 void setCaptureFixture(){
+    if(captureStage>=28){setDisasterCapture(captureStage-28);return;}
     reset();showHelp=false;world.time=12;world.teaVisited=true;
     cameraX=3;cameraY=6;cameraZ=26;cameraYaw=-4;cameraPitch=-10;
     viewAim={0,1,-5};human.position={1,.02f,21};human.yaw=150;
@@ -655,12 +667,13 @@ void setCaptureFixture(){
 }
 void timer(int){
     int now=glutGet(GLUT_ELAPSED_TIME);float dt=clamp((now-lastTick)/1000.0f,0,.05f);lastTick=now;
-    if(renderCheck)setCaptureFixture();else update(dt);
+    if(!renderCheck)update(dt);
     glutPostRedisplay();glutTimerFunc(16,timer,0);
 }
 
 #include "LivingWorld.inl"
 #include "Homestead.inl"
+#include "Disaster.inl"
 
 // ------------------------- DETERMINISTIC LOGIC TESTS -------------------------
 int selfTest(){
@@ -790,12 +803,52 @@ int selfTest(){
     auto cow=homestead.cows[0];require(cowCollision(cow.position.x,cow.position.z),"cows block walking through bodies");
     paused=true;advance(1);require(length(cow.position-homestead.cows[0].position)==0,"pause freezes cows");
     reset();require(homestead.doorAngle==0&&!homestead.firstPerson&&homestead.lampOn&&homestead.feedTime==0,"reset restores home and farm");
-    std::cout<<"PASS: "<<checks<<" campaign, human, weather, navigation, home and farm checks\n";return 0;
+    reset();require(!startDisaster(),"disaster baton rejects remote activation");
+    human.position={BATON_POSITION.x,.02f,BATON_POSITION.z+.5f};paused=true;
+    require(!interact(14),"paused baton cannot activate");paused=false;
+    require(interact(14)&&disaster.phase==D_PRELUDE,"nearby E interaction arms disaster and routes to tea");
+    disaster.seed=18473;require(!startDisaster(),"disaster cannot be triggered twice");
+    Weather weather=atmosphere.weather;keyboard('4',0,0);require(atmosphere.weather==weather,"cinematic weather cannot be overridden");
+    std::array<bool,11> seen{};seen[D_PRELUDE]=true;
+    bool safe=true,continuous=true,grip=true,ran=false,covered=false,slowSip=false,phaseOrder=true;
+    float lastDrinkDuration=0;Vec3 previousPosition=human.position;DisasterPhase previousPhase=disaster.phase;
+    for(int i=0;i<15000;i++){
+        update(1.0f/60);seen[disaster.phase]=true;
+        phaseOrder=phaseOrder&&disaster.phase>=previousPhase;previousPhase=disaster.phase;
+        safe=safe&&!checkCollision(human.position.x,human.position.z);
+        continuous=continuous&&length(human.position-previousPosition)<.16f;previousPosition=human.position;
+        ran=ran||(disaster.phase==D_QUAKE&&human.walkBlend>.8f);covered=covered||disaster.fear>.3f;
+        if(human.cupHeld)grip=grip&&length(rightHandPosition()-cupHandlePosition())<.001f;
+        if(disaster.phase==D_LAST_CUP&&human.action==TEA_DRINK){lastDrinkDuration+=1.0f/60;slowSip=lastDrinkDuration>14;}
+        if(disaster.phase==D_SILENCE&&disaster.time>=22)break;
+    }
+    bool allPhases=true;for(int i=D_PRELUDE;i<=D_SILENCE;i++)allPhases=allPhases&&seen[i];
+    require(allPhases&&phaseOrder&&disaster.fade==1,"complete disaster story reaches final darkness");
+    require(safe&&continuous,"disaster character movement is continuous and collision free");
+    require(ran&&covered,"character runs and covers head during disaster");
+    require(disaster.finalSip&&disaster.finalReturned&&slowSip&&grip,"last cup is slowly drunk with attached hand and returned");
+    require(!human.cupHeld&&length(human.cupPosition-Vec3{.12f,1.37f,0})<.001f,"final cup stays on the table");
+    require(disaster.spawnCount>8&&disaster.impactCount>8,"multiple staggered meteor impacts");
+    require(disaster.damage>.99f&&disaster.lava==1,"disaster reaches full damage and lava");
+    require(actions()==0&&world.state==HEALTHY,"disaster does not corrupt restoration campaign state");
+    require(disaster.particles.size()==480&&disaster.meteors.size()==10&&disaster.craters.size()==12,"bounded disaster particle meteor and crater budgets");
+    require(disasterGround(0,0)==0&&disasterGround(-10,-18)==0,"tea platform and home floor remain stable");
+    paused=true;float disasterTime=disaster.totalTime;Vec3 firstParticle=disaster.particles[0].p;advance(2);
+    require(disaster.totalTime==disasterTime&&length(disaster.particles[0].p-firstParticle)==0,"pause freezes entire disaster");paused=false;
+    disaster.quake=1;disaster.reducedMotion=true;require(length(disasterCameraShake())==0,"reduced motion eliminates camera shake");
+    reset();require(!disasterActive()&&disaster.damage==0&&disaster.spawnCount==0&&damage()==0,"restart clears all disaster state");
+    human.position={-3.6f,.02f,4};startDisaster();disaster.seed=99;spawnMeteor();auto meteor=disaster.meteors[0];
+    require(meteor.active&&safeImpactPoint(meteor.target),"meteor chooses a safe randomized impact zone");
+    updateDisaster(.2f);Vec3 first=disaster.meteors[0].p;float firstDistance=length(first-meteor.start);
+    updateDisaster(.2f);require(length(disaster.meteors[0].p-first)>firstDistance,"meteor accelerates toward the ground");
+    reset();
+    std::cout<<"PASS: "<<checks<<" campaign, human, weather, home, farm and disaster checks\n";return 0;
 }
 int main(int argc,char** argv){
     if(argc>1&&std::string(argv[1])=="--self-test")return selfTest();
     if(argc>2&&std::string(argv[1])=="--render-check"){renderCheck=true;captureDir=argv[2];}
     if(argc>1&&std::string(argv[1])=="--benchmark")benchmarkMode=true;
+    if(argc>1&&std::string(argv[1])=="--disaster-benchmark"){benchmarkMode=true;disasterBenchmark=true;}
     // Keep our command-line arguments away from GLUT's argument parser.
     int glutArgc=1;glutInit(&glutArgc,argv);glutInitDisplayMode(GLUT_DOUBLE|GLUT_RGB|GLUT_DEPTH|GLUT_MULTISAMPLE);
     glutInitWindowSize(width,height);glutCreateWindow("A Last Cup of Tea | A Campaign for Nature");
@@ -806,6 +859,7 @@ int main(int argc,char** argv){
     glEnable(GL_FOG);glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);glShadeModel(GL_SMOOTH);
     quadric=gluNewQuadric();gluQuadricNormals(quadric,GLU_SMOOTH);reset();if(renderCheck)setCaptureFixture();
     if(benchmarkMode){showHelp=false;selectWeather(STORM);atmosphere.weatherMix={0,0,0,1,0,0};}
+    if(disasterBenchmark){setDisasterCapture(8);}
     glutDisplayFunc(display);glutReshapeFunc(reshape);glutKeyboardFunc(keyboard);glutKeyboardUpFunc(keyboardUp);
     glutSpecialFunc(specialKeyboard);
     glutMouseFunc(mouse);glutPassiveMotionFunc(mouseMotion);glutMotionFunc(mouseMotion);glutIgnoreKeyRepeat(1);

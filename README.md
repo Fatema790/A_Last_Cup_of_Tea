@@ -9,7 +9,9 @@ A native, real-time **3D interactive simulation** for a Computer Graphics & Anim
 
 Double-click **`Play.cmd`** in this folder, or open `dist/last_cup.exe`. It is a 64-bit Windows executable. An OpenGL-capable display driver is required. Click inside the window to capture the mouse. Tab releases it.
 
-Version 3 adds a larger furnished, walkable house with an automatic front door, first-person view, warm lighting, paths and a fenced cow farm with four animated cows, a barn, hay and water troughs. See [Home and farm](docs/HOMESTEAD.md) for a tour.
+Version 4 adds a complete disaster story: activate the glowing red baton with E, then watch the warning, earthquake, lava eruptions, meteor impacts, extreme storm, slow last cup, final collapse and fade. P pauses, R restarts, and M switches off camera shake. See [Disaster story](docs/DISASTER.md).
+
+Version 3 added a larger furnished, walkable house with an automatic front door, first-person view, warm lighting, paths and a fenced cow farm with four animated cows, a barn, hay and water troughs. See [Home and farm](docs/HOMESTEAD.md) for a tour.
 
 Version 2 added a visible, articulated human protagonist, a following camera, an animated tea-drinking sequence, four seasons and six weather states. The original valley, observations, damage event, restoration tasks and final tea objective remain in place.
 
@@ -61,6 +63,7 @@ Linux build instructions are provided for portability; see `docs/VALIDATION.md` 
 | W / A / S / D | Move forward / left / backward / right |
 | Mouse | Orbit the following camera after clicking in the window |
 | E | Interact; leave the tea table; toggle home lights or put out hay |
+| M | Toggle disaster camera shake |
 | V | Toggle first-person and following-camera views |
 | Q / C | Raise / lower the camera angle while the character stays on the ground |
 | F1 / F2 / F3 / F4 | Spring / summer / autumn / winter |
@@ -98,6 +101,7 @@ The warning cannot trigger until the first tea interaction. Repeated task presse
 ## Project structure
 
 - `main.cpp` — original environment, campaign, input, rendering and integrated tests.
+- `Disaster.h` / `Disaster.inl` - disaster story, procedural fissures and lava, bounded meteors/particles, character direction and cinematic camera.
 - `Homestead.h` / `Homestead.inl` - furnished home, wall and door collisions, automatic door, first-person support and animated cow farm.
 - `LivingWorld.h` — character, season, weather and bounded particle data.
 - `LivingWorld.inl` — navigation, human animation, articulated model, camera, weather and particle implementation. Included by `main.cpp`, so a single compiler command still works.
@@ -127,7 +131,7 @@ Materials use vertex colour for ambient/diffuse response and `glMaterialfv` for 
 .\dist\last_cup.exe --benchmark
 ```
 
-The first command runs 115 simulation checks without creating a graphics window. The second opens the native renderer, captures 28 campaign, season, weather, character, home and farm states to portable pixmap (`.ppm`) files and exits. These screenshots are deterministic rendering fixtures; separate logic tests exercise actual interactions and complete animations. The benchmark measures 240 animated storm frames and checks for OpenGL errors. Normal play always starts healthy and requires player actions.
+The first command runs 136 simulation checks without creating a graphics window. The second opens the native renderer, captures 39 campaign, season, weather, character, home, farm and disaster states to portable pixmap (`.ppm`) files and exits. These screenshots are deterministic rendering fixtures; separate logic tests exercise actual interactions and complete animations. The benchmark measures 240 animated storm frames and checks for OpenGL errors. Normal play always starts healthy and requires player actions.
 
 ## Dependencies and credits
 
