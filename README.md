@@ -63,6 +63,7 @@ Linux build instructions are provided for portability; see `docs/VALIDATION.md` 
 | W / A / S / D | Move forward / left / backward / right |
 | Mouse | Orbit the following camera after clicking in the window |
 | E | Interact; leave the tea table; toggle home lights or put out hay |
+| F | Cycle disaster playback speed: 1x, 4x, 8x |
 | M | Toggle disaster camera shake |
 | V | Toggle first-person and following-camera views |
 | Q / C | Raise / lower the camera angle while the character stays on the ground |
@@ -131,7 +132,7 @@ Materials use vertex colour for ambient/diffuse response and `glMaterialfv` for 
 .\dist\last_cup.exe --benchmark
 ```
 
-The first command runs 136 simulation checks without creating a graphics window. The second opens the native renderer, captures 39 campaign, season, weather, character, home, farm and disaster states to portable pixmap (`.ppm`) files and exits. These screenshots are deterministic rendering fixtures; separate logic tests exercise actual interactions and complete animations. The benchmark measures 240 animated storm frames and checks for OpenGL errors. Normal play always starts healthy and requires player actions.
+The first command runs 144 simulation checks without creating a graphics window. The second opens the native renderer, captures 39 campaign, season, weather, character, home, farm and disaster states to portable pixmap (`.ppm`) files and exits. These screenshots are deterministic rendering fixtures; separate logic tests exercise actual interactions and complete animations. The benchmark measures 240 animated storm frames and checks for OpenGL errors. Normal play always starts healthy and requires player actions.
 
 ## Dependencies and credits
 

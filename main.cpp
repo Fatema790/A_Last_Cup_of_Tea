@@ -605,6 +605,7 @@ void keyboard(unsigned char raw,int,int){
     if(key=='r'){reset();return;}if(key=='h'){showHelp=!showHelp;return;}
     if(key==9){captureMouse(!mouseCaptured);return;}if(paused)return;
     if(key=='m'){disaster.reducedMotion=!disaster.reducedMotion;return;}
+    if(key=='f'&&disasterActive()){disaster.playbackSpeed=disaster.playbackSpeed==1?4:disaster.playbackSpeed==4?8:1;return;}
     if(disasterActive())return;
     if(key>='1'&&key<='6'){selectWeather(Weather(key-'1'));return;}
     if(key=='v'){homestead.firstPerson=!homestead.firstPerson;updateFollowCamera(0,true);return;}
@@ -665,9 +666,16 @@ void setCaptureFixture(){
     }
     updateTrees(0);updateSmoke(0);selected=-1;messageUntil=0;
 }
+// Fast-forward uses small simulation steps to preserve collision and animation events.
+void advancePlayback(float realDt){
+    if(paused||realDt<=0)return;
+    float duration=realDt*(disasterActive()?disaster.playbackSpeed:1);
+    int steps=std::max(1,int(std::ceil(duration*60)));
+    for(int i=0;i<steps;i++)update(duration/steps);
+}
 void timer(int){
     int now=glutGet(GLUT_ELAPSED_TIME);float dt=clamp((now-lastTick)/1000.0f,0,.05f);lastTick=now;
-    if(!renderCheck)update(dt);
+    if(!renderCheck)advancePlayback(dt);
     glutPostRedisplay();glutTimerFunc(16,timer,0);
 }
 
@@ -842,6 +850,18 @@ int selfTest(){
     updateDisaster(.2f);Vec3 first=disaster.meteors[0].p;float firstDistance=length(first-meteor.start);
     updateDisaster(.2f);require(length(disaster.meteors[0].p-first)>firstDistance,"meteor accelerates toward the ground");
     reset();
+    keyboard('f',0,0);require(disaster.playbackSpeed==1,"fast forward does not affect normal exploration");
+    human.position={-3.6f,.02f,4};startDisaster();disaster.seed=18473;
+    keyboard('f',0,0);require(disaster.playbackSpeed==4,"F selects 4x disaster playback");
+    float beforeFast=world.time;advancePlayback(.1f);require(std::abs(world.time-beforeFast-.4f)<.001f,"4x advances simulation four times faster");
+    keyboard('f',0,0);require(disaster.playbackSpeed==8,"F selects 8x disaster playback");
+    paused=true;beforeFast=world.time;advancePlayback(1);require(world.time==beforeFast,"pause freezes fast forward");paused=false;
+    bool fastSafe=true;for(int i=0;i<1800&&disaster.fade<1;i++){
+        advancePlayback(1.0f/60);fastSafe=fastSafe&&!checkCollision(human.position.x,human.position.z);
+    }
+    require(disaster.fade==1&&disaster.finalSip&&disaster.finalReturned&&fastSafe,"8x completes entire story and cup performance within 30 real seconds");
+    keyboard('f',0,0);require(disaster.playbackSpeed==1,"F cycles back to normal speed");
+    keyboard('f',0,0);reset();require(disaster.playbackSpeed==1,"restart resets playback speed");
     std::cout<<"PASS: "<<checks<<" campaign, human, weather, home, farm and disaster checks\n";return 0;
 }
 int main(int argc,char** argv){

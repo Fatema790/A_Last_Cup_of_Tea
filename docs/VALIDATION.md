@@ -1,6 +1,6 @@
 # Build and validation record
 
-Version 4, validated on Windows x64, 20 September 2026.
+Version 4, validated on Windows x64, 21 September 2026.
 
 ## Build
 
@@ -22,7 +22,7 @@ FreeGLUT archive SHA-256:
 Running `dist/last_cup.exe --self-test` reports:
 
 ```text
-PASS: 136 campaign, human, weather, home, farm and disaster checks
+PASS: 144 campaign, human, weather, home, farm and disaster checks
 ```
 
 The original campaign checks cover initial state, distance rejection, the first-tea prerequisite, gradual damage, shaking and falling trees, task availability, pause, removed trees, planting, duplicate interaction prevention, recovery limits, all six restoration actions, full restoration, bird recovery, the final tea interaction, reset and forward movement.
@@ -31,7 +31,7 @@ New checks cover distance-based walking, idle settling, stopping the gait at col
 
 Collision checks cover the table, house, rocks, mountain boundary, trees, river and bridge. A ground-grid flood fill checks that all fifteen interaction points have a collision-free walking approach from the starting area. Interaction distance belongs to the human, so placing the camera close to an object cannot trigger a remote interaction.
 
-CTest reports one test passed and zero failed. The 136 checks run inside that test.
+CTest reports one test passed and zero failed. The 144 checks run inside that test.
 
 New home and farm checks cover walking through the door in both directions, proximity opening, delayed closing, occupied-door safety, collision-free routes into every room, solid walls and furniture, first-person viewing, remaining indoors during rain, lamp switching, feeding without campaign progress, an accessible farm gate, bounded cow movement, pause and reset. Room-route checks caught a counter blocking the bathroom and a coffee table crowding the door; both layouts were corrected.
 
@@ -89,10 +89,15 @@ The executable imports only Windows system libraries: ADVAPI32, GDI32, GLU32, KE
 
 ## Version 4 disaster validation
 
-All 136 checks passed through CTest. The full disaster story is advanced through the actual baton interaction, not by assigning its end state. Checks cover distance and pause gating, duplicate activation, cinematic weather ownership, ordered progression through every phase, collision-free continuous escape and return, running and head-covering reactions, hand/cup attachment, the slow final sip, safe cup replacement, repeated meteor impacts, final fade, bounded storage, stable tea/home ground, pause, reduced camera shake, reset, safe meteor target selection and accelerating flight. The six original recovery objective counters remain unchanged.
+All 144 checks passed through CTest. The full disaster story is advanced through the actual baton interaction, not by assigning its end state. Checks cover distance and pause gating, duplicate activation, cinematic weather ownership, ordered progression through every phase, collision-free continuous escape and return, running and head-covering reactions, hand/cup attachment, the slow final sip, safe cup replacement, repeated meteor impacts, final fade, bounded storage, stable tea/home ground, pause, reduced camera shake, reset, safe meteor target selection and accelerating flight. The six original recovery objective counters remain unchanged.
 
 The native renderer captured 39 scenes with GL_NO_ERROR. Disaster scenes 29-39 show the opening tea, warning, earthquake, lava, a visible descending meteor, storm, ruins, last sip, final collapse, abandoned cup and final darkness. These fixtures use a fixed random seed and advance the same update functions as the game. A camera adjustment keeps the first meteor readable; later impact positions remain randomized in normal play.
 
 The original house/farm and campaign render fixtures were recaptured with the new build. No manual end-to-end keyboard/mouse playthrough is claimed; input gating, animations and navigation were exercised by the deterministic logic tests, and framebuffer captures were visually reviewed.
 
 ![Disaster sequence](../screenshots/disaster-review.png)
+
+
+## Fast-forward shortcut
+
+F cycles disaster playback through 1x, 4x and 8x. The update loop subdivides accelerated time into steps of at most 1/60 second. Eight additional checks cover normal-play isolation, both speed settings, measured 4x time advance, pause, a complete collision-free 8x story with both final cup events within 30 seconds of simulated real time, returning to 1x and restart reset. The earlier 39 rendering captures and benchmark record the base disaster release; this shortcut update changes the title/control text and simulation scheduling.

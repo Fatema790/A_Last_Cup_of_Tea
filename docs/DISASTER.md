@@ -4,6 +4,8 @@
 
 Run Play.cmd. Walk to the glowing red emergency baton just left of the starting area, southwest of the tea table. It is marked D on the minimap. Approach until the E prompt says Activate disaster sequence, then press E. The baton is a physical control on a pedestal, modeled from cylinders, rings and a glowing tip.
 
+Press **F** during the disaster to cycle **1x -> 4x -> 8x -> 1x**. The current speed appears beside the cinematic title. At 8x, the story takes roughly 20 seconds. Fast-forward advances all animation and effects in small simulation steps, preserving collisions and the final tea performance. Pause still works, and restart returns to 1x.
+
 The character walks to the tea table and drinks before the warning begins. The cinematic takes roughly two and a half minutes, depending on the initial approach. It runs in the real 3D world using the same character, table, house and farm.
 
 During the story, movement, camera orbit, ordinary interactions, seasons and manual weather are temporarily controlled by the sequence. P pauses everything, R restarts the healthy world, Esc exits, Tab releases the mouse, and M toggles camera shake. This is a directed cinematic; it does not implement player death or free-roaming survival. The original restoration campaign remains available before activating the baton and after restarting.

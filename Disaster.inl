@@ -290,9 +290,9 @@ void drawDisasterHUD(){
     rect(0,0,float(width),65,{.015f,.02f,.025f},.92f);rect(0,height-82.0f,float(width),82,{.015f,.02f,.025f},.94f);
     const char* titles[]={"","ONE PEACEFUL CUP","A WARNING IN THE EARTH","THE GROUND REMEMBERS","FIRE BENEATH OUR FEET","THE SKY IS FALLING","THE STORM BREAKS","A WORLD COMING UNDONE","A LAST CUP OF TEA","THE FINAL COLLAPSE","WHAT REMAINS"};
     const char* lines[]={"","The baton is armed. For a moment, everything is still.","A tremor. A ripple in the cup. Something has changed.","He stands, searches the sky, and runs from the table.","The ground opens. Beneath it, a river of fire.","Light crosses the sky. Then the earth answers.","Rain cannot put out what we have set in motion.","There is nowhere untouched. But there is still the table.","He returns. Not to escape the world, but to remember it.","The last quiet moment has passed.","A half-finished cup. A little warmth. Then silence."};
-    centered(39,titles[disaster.phase],{.95f,.79f,.53f},GLUT_BITMAP_HELVETICA_18);
+    centered(39,std::string(titles[disaster.phase])+"  /  "+std::to_string(disaster.playbackSpeed)+"x",{.95f,.79f,.53f},GLUT_BITMAP_HELVETICA_18);
     centered(height-50.0f,lines[disaster.phase],{.88f,.88f,.82f},GLUT_BITMAP_HELVETICA_12);
-    centered(height-23.0f,disaster.reducedMotion?"P Pause   R Restart   Esc Exit   M Camera shake OFF":"P Pause   R Restart   Esc Exit   M Reduce camera shake",{.57f,.64f,.66f},GLUT_BITMAP_HELVETICA_12);
+    centered(height-23.0f,disaster.reducedMotion?"F Speed 1x/4x/8x   P Pause   R Restart   Esc Exit   M Shake OFF":"F Speed 1x/4x/8x   P Pause   R Restart   Esc Exit   M Reduce shake",{.57f,.64f,.66f},GLUT_BITMAP_HELVETICA_12);
     if(disaster.fade>0)rect(0,0,float(width),float(height),{0,0,0},disaster.fade);
     if(disaster.fade>.9f){centered(height*.46f,"A LAST CUP OF TEA",{.88f,.82f,.68f},GLUT_BITMAP_TIMES_ROMAN_24);centered(height*.53f,"Protect the world that makes peaceful moments possible.",{.61f,.66f,.61f},GLUT_BITMAP_HELVETICA_12);centered(height*.62f,"R  Begin again     /     Esc  Exit",{.48f,.52f,.50f},GLUT_BITMAP_HELVETICA_12);}
     if(paused){rect(0,0,float(width),float(height),{.01f,.02f,.03f},.5f);centered(height*.5f,"PAUSED  /  P to continue",cream);}

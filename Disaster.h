@@ -12,6 +12,7 @@ struct DisasterWorld {
     float impactFlash=0,impactShake=0,meteorTimer=1,eruptionTimer=0,restTime=0,standTime=0;
     float fear=0,lookYaw=0,lookPitch=0,fade=0;
     bool reducedMotion=false,escapePlanned=false,finalSip=false,finalReturned=false;
+    int playbackSpeed=1;
     unsigned seed=92171;int particleCursor=0,craterCursor=0,impactCount=0,spawnCount=0;
     Vec3 impactPosition;
     std::array<DisasterParticle,480> particles;
