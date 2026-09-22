@@ -39,8 +39,8 @@ void spawnMeteor(){
         Vec3 target;bool found=false;
         for(int i=0;i<32;i++){target={-31+disasterRandom()*62,0,-29+disasterRandom()*61};if(safeImpactPoint(target)){found=true;break;}}
         if(!found)target={-27,0,25};
-        // The first impact introduces the event inside the main camera composition.
-        // Later impacts scatter across the larger safe zones.
+        // The first impact introduces the event inside the main camera composition
+        // Later impacts scatter across the larger safe zones
         if(disaster.spawnCount==0)target={-12+disasterRandom()*.5f,0,4+disasterRandom()*.5f};
         m=Meteor{};m.active=true;m.target=target;m.start=target+Vec3{-13-disasterRandom()*9,25+disasterRandom()*13,-16};
         m.p=m.start;m.duration=2.8f+disasterRandom()*1.3f;m.size=.45f+disasterRandom()*.45f;disaster.spawnCount++;return;
