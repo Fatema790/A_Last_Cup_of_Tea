@@ -7,7 +7,7 @@ A native, real-time **3D interactive simulation** for a Computer Graphics & Anim
 
 ## Run on Windows
 
-Double-click **`Play.cmd`** in this folder, or open `dist/last_cup.exe`. It is a 64-bit Windows executable. An OpenGL-capable display driver is required. Click inside the window to capture the mouse. Tab releases it.
+Double-click *Play.cmd* in this folder to play. Or download last_cup.exe from the Releases section (right side of this page). It is a 64-bit Windows executable. An OpenGL-capable display driver is required. Click inside the window to capture the mouse. Tab releases it.
 
 Version 4 adds a complete disaster story: activate the glowing red baton with E, then watch the warning, earthquake, lava eruptions, meteor impacts, extreme storm, slow last cup, final collapse and fade. P pauses, R restarts, and M switches off camera shake. See [Disaster story](docs/DISASTER.md).
 
