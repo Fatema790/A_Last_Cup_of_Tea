@@ -1,5 +1,5 @@
 #pragma once
-// A self-contained story layered over the original recovery campaign.
+// A self contained story layered over the original recovery campaign.
 enum DisasterPhase { D_NORMAL, D_PRELUDE, D_WARNING, D_QUAKE, D_LAVA, D_METEORS,
     D_STORM, D_RUIN, D_LAST_CUP, D_COLLAPSE, D_SILENCE };
 enum DisasterParticleKind { D_EMBER, D_DUST, D_SMOKE, D_CHIP };
